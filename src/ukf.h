@@ -95,6 +95,31 @@ public:
   MatrixXd GenerateAugmentedSigmaPoints(MatrixXd* Xsig);
 
   /**
+  * Predicts the sigma points at time (tk + 1).
+  * @param Xsig_aug The augmented sigma points at time tk
+  * @param delta_t The time difference ([tk + 1] - tk)
+  * @return The Predicted sigma points at time (tk + 1)
+  * */
+  MatrixXd PredictSigmaPoints(MatrixXd* Xsig_aug, double delta_t);
+
+
+  /**
+   * Predicts the mean from our distribution of predicted sigma points
+   * @param Xsig_pred the predicted sigma points
+   * @return The predicted mean vector calculated from the sigma points
+   */
+  VectorXd PredictMean(MatrixXd* Xsig_pred);
+
+
+  /**
+   * Predicts the state covariance matrix for the next timestep
+   * @param Xsig_pred the predicted sigma points
+   * @param x The mean state vector
+   * @return the predicted state covariance matrix
+   */ 
+  MatrixXd PredictStateCovarianceMatrix(MatrixXd* Xsig_pred, VectorXd* x);
+
+  /**
    * ProcessMeasurement
    * @param meas_package The latest measurement data of either radar or laser
    */

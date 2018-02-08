@@ -203,6 +203,118 @@ MatrixXd UKF::GenerateSigmaPoints(){
   return Xsig;
 }
 
+
+/**
+ *  Predicts the sigma points at time (tk + 1).
+ * @param Xsig_aug The augmented sigma points at time tk
+ * @param delta_t The time difference ([tk + 1] - tk)
+ * @return The Predicted sigma points at time (tk + 1)
+ */
+MatrixXd UKF::PredictSigmaPoints(MatrixXd* Xsig_aug, double delta_t){
+  MatrixXd Xsig_pred = MatrixXd(n_x_, 2 * n_aug_ + 1);
+
+  for(int i = 0; i < (*Xsig_aug).cols(); ++i){
+      VectorXd Xsig_aug_col = (*Xsig_aug).col(i);
+      VectorXd Xk = Xsig_aug_col.head(n_x_);
+      
+      float v_k = Xsig_aug_col(2);
+      float phi = Xsig_aug_col(3);
+      float phi_dot = Xsig_aug_col(4);
+      
+      float delta_t_sq = delta_t * delta_t;
+      float acc_noise = Xsig_aug_col(5);
+      float yaw_rate_noise = Xsig_aug_col(6);
+      
+      VectorXd Q = VectorXd(5);
+      Q << 0.5 * delta_t_sq * cos(phi) * acc_noise,
+      0.5 * delta_t_sq * sin(phi) * acc_noise,
+      delta_t * acc_noise,
+      0.5 * delta_t_sq * yaw_rate_noise,
+      delta_t * yaw_rate_noise;
+      
+      VectorXd u = VectorXd(5);
+      
+      if (phi_dot == 0.0){
+        u << v_k * cos(phi) * delta_t,
+        v_k * sin(phi) * delta_t,
+        0,
+        phi_dot * delta_t,
+        0;
+      }else{
+        float divider = v_k / phi_dot;
+        float phi_plus_phi_dot_T = phi + delta_t * phi_dot;
+      
+        u << divider * (sin(phi_plus_phi_dot_T) - sin(phi)),
+        divider * (-cos(phi_plus_phi_dot_T) + cos(phi)),
+        0,
+        phi_dot * delta_t,
+        0;
+      }
+      
+      VectorXd Xk_plus_one = Xk + u + Q;
+      Xsig_pred.col(i) = Xk_plus_one;
+  }
+
+
+  return Xsig_pred;
+}
+
+
+/**
+ * Predicts the mean from our distribution of predicted sigma points
+ * @param X_sig_prem the predicted sigma points
+ * @return the predicted mean vector calculated from the sigma points
+ */
+VectorXd UKF::PredictMean(MatrixXd* Xsig_pred){
+  VectorXd x = VectorXd(n_x_);
+  
+  // define spreading parameter
+  double lambda = 3 - n_aug_;
+
+  //set weights  
+  double w_i_0 =  lambda / (lambda + n_aug_);
+  double w_i_1_plus = 1 / (2 * (lambda + n_aug_));
+
+  // predict state mean
+  for(int i = 0; i < (*Xsig_pred).cols(); ++i){
+    VectorXd col_i = (*Xsig_pred).col(i);
+    double w_i = i == 0 ? w_i_0 : w_i_1_plus;
+    x += (w_i * col_i);
+  }
+
+  return x;
+}
+
+/**
+ * Predicts the state covariance matrix for the next timestep
+ * @param X_sig_pred the predicted sigma points
+ * @param x The mean state vector
+ * @return the predicted state covariance matrix
+ */ 
+MatrixXd UKF::PredictStateCovarianceMatrix(MatrixXd* Xsig_pred, VectorXd* x){
+  //create covariance matrix for prediction
+  MatrixXd P = MatrixXd(n_x_, n_x_);
+  P.setZero();
+
+  // define spreading parameter
+  double lambda = 3 - n_aug_;
+
+  // set weights
+  double w_i_0 =  lambda / (lambda + n_aug_);
+  double w_i_1_plus = 1 / (2 * (lambda + n_aug_));
+
+  // predict state covariance matrix
+  for(int i = 0; i < (*Xsig_pred).cols(); ++i){
+    float w_i = i == 0 ? w_i_0 : w_i_1_plus;
+    VectorXd col_i = (*Xsig_pred).col(i);
+    VectorXd diff =  col_i - (*x);
+    P += w_i * diff * diff.transpose();
+  }  
+
+  return P;
+}
+
+
 /**
  * Predicts sigma points, the state, and the state covariance matrix.
  * @param {double} delta_t the change in time (in seconds) between the last
