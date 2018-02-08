@@ -1,6 +1,7 @@
 #include "ukf.h"
 #include "Eigen/Dense"
 #include <iostream>
+#include <cmath>
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -25,9 +26,11 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
+  // ** This value is too high for a bicycle!
   std_a_ = 30;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
+  // ** This value is too high for a bicycle!
   std_yawdd_ = 30;
   
   //DO NOT MODIFY measurement noise values below these are provided by the sensor manufacturer.
@@ -47,6 +50,8 @@ UKF::UKF() {
   std_radrd_ = 0.3;
   //DO NOT MODIFY measurement noise values above these are provided by the sensor manufacturer.
   
+  previous_timestamp_ = 0;
+
   /**
   TODO:
 
@@ -54,6 +59,8 @@ UKF::UKF() {
 
   Hint: one or more values initialized above might be wildly off...
   */
+  n_x_ = 5;
+  n_aug_ = 7;
 }
 
 UKF::~UKF() {}
@@ -63,12 +70,137 @@ UKF::~UKF() {}
  * either radar or laser.
  */
 void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
-  /**
-  TODO:
+  std::string measurementType = "";
 
-  Complete this function! Make sure you switch between lidar and radar
-  measurements.
-  */
+  /* ***************
+   * INITIALIZATION
+   * ************** */
+  if(!is_initialized_)
+  {
+    
+    // Initialize our process covariance matrix
+    // TODO initialise differently depending on sensor
+    P_ << 1, 0, 0, 0, 0,
+          0, 1, 0, 0, 0,
+          0, 0, 1, 0, 0,
+          0, 0, 0, 1, 0,
+          0, 0, 0, 0, 1;
+
+    float x, y = 0;
+    // We are processing the first measurement
+    switch(meas_package.sensor_type_){
+      case MeasurementPackage::RADAR :
+      {
+        // Since we use block specific variables (rho & phi) we run this code
+        // with the curly braces {} 
+        float rho = meas_package.raw_measurements_[0];
+        float phi = meas_package.raw_measurements_[1];
+
+        x = rho * cos(phi);
+        y = rho * sin(phi);
+        break;
+      }
+  
+      case MeasurementPackage::LASER :
+        x = meas_package.raw_measurements_[0];
+        y = meas_package.raw_measurements_[1];      
+        break;
+
+      default:
+        cout << "Unknown measurement package: " << meas_package.sensor_type_ << endl;
+        return;
+    }
+
+    // TODO we probably want to start with a reasonable velocity and 0 angle
+    x_ << x, y, 0, 0, 0;
+
+    previous_timestamp_ = meas_package.timestamp_;
+
+    is_initialized_ = true;
+    return;
+  }
+
+  measurementType = meas_package.sensor_type_ == MeasurementPackage::LASER ? "LASER" : "RADAR";
+  //compute the time elapsed between the current and previous measurements
+  float dt = (meas_package.timestamp_ - previous_timestamp_) / 1000000.0; //dt - expressed in seconds
+  previous_timestamp_ = meas_package.timestamp_;
+
+
+  MatrixXd Xsig = GenerateSigmaPoints();
+  MatrixXd Xsig_aug = GenerateAugmentedSigmaPoints(&Xsig);
+
+}
+
+
+/**
+ * Generates the augmented sigma points from the current sigma points
+ * @param Xsig The Current sigma points
+ * @return The augmented sigma points
+ * */
+MatrixXd UKF::GenerateAugmentedSigmaPoints(MatrixXd* Xsig){
+  // Define our spreading factor lambda
+  double lambda = 3 - n_aug_;
+
+  // create augmented mean vector
+  VectorXd x_aug = VectorXd(7);
+
+  // create augmented state covariance
+  MatrixXd P_aug = MatrixXd(7, 7);
+  // Making sure it is set to zero
+  P_aug.setZero();
+
+  // create sigma point matrix
+  MatrixXd Xsig_aug = MatrixXd(n_aug_, 2 * n_aug_ + 1);
+
+  // create augmented mean state
+  // since the distributions of our noice and yaw acceleration are centered
+  // around zero, the means of both are zero, hence why we do not set
+  // x_aug(5) and x_aug(6) 
+  x_aug.head(n_x_) = *Xsig; 
+
+  //Initialise augmented covariance Matrix
+  P_aug.block(0, 0, n_x_, n_x_) = P_;
+
+  // Define the process noice covariance matrux
+  MatrixXd Q = MatrixXd(2, 2) ;
+  Q << std_a_ * std_a_, 0,
+       0, std_yawdd_ * std_yawdd_;
+  P_aug.block(n_x_, n_x_, n_aug_ - n_x_, n_aug_ - n_x_) = Q;
+
+  //create square root matrix
+  MatrixXd P_aug_lambda = (lambda_ + n_aug_) * P_aug;
+  MatrixXd P_aug_lambda_sqrt = P_aug_lambda.llt().matrixL();
+  
+  //create augmented sigma points
+  Xsig_aug.col(0) = x_aug;
+  Xsig_aug.block(0, 1, n_aug_, n_aug_) = P_aug_lambda_sqrt.colwise() + x_aug; 
+  Xsig_aug.block(0, n_aug_ + 1, n_aug_, n_aug_) = (-1 * P_aug_lambda_sqrt).colwise() + x_aug;
+
+  return Xsig_aug;
+}
+
+
+/**
+ * Generates 2 * n_x + 1 sigma points from the current x vector and process
+ * covariance matrix P
+ * @return the generated sigma points */
+MatrixXd UKF::GenerateSigmaPoints(){
+  // Generate Sigma points
+  MatrixXd Xsig = MatrixXd(n_x_, 2 * n_x_ + 1);
+
+  // Easily set the first sigma point, which is the current position
+  Xsig.col(0) = x_;
+
+   // Now onto calculating the more complex terms
+  double lambda = 3 - n_x_;
+  double lambda_plus_nx = lambda + n_x_;
+  MatrixXd P_sqrt = lambda_plus_nx * P_;
+  P_sqrt = P_sqrt.llt().matrixL();
+  
+  Xsig.block(0, 1, n_x_, n_x_) = P_sqrt.colwise() + x_;
+  Xsig.block(0, n_x_ + 1, n_x_, n_x_) = (-1 * P_sqrt).colwise() + x_;
+
+  return Xsig;
 }
 
 /**

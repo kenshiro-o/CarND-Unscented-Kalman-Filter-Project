@@ -67,6 +67,8 @@ public:
   ///* Sigma point spreading parameter
   double lambda_;
 
+  // Recording the previous timestamp
+  long long previous_timestamp_;
 
   /**
    * Constructor
@@ -77,6 +79,20 @@ public:
    * Destructor
    */
   virtual ~UKF();
+
+  /**
+   * Generates 2 * n_x + 1 sigma points from the current x vector and process
+   * covariance matrix P
+   * @return the generated sigma points */
+  MatrixXd GenerateSigmaPoints();
+
+
+  /**
+   * Generates the augmented sigma points from the current sigma points
+   * @param Xsig The Current sigma points
+   * @return The augmented sigma points
+   * */
+  MatrixXd GenerateAugmentedSigmaPoints(MatrixXd* Xsig);
 
   /**
    * ProcessMeasurement
