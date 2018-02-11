@@ -64,9 +64,6 @@ public:
   ///* Augmented state dimension
   int n_aug_;
 
-  ///* Sigma point spreading parameter
-  double lambda_;
-
   // Recording the previous timestamp
   long long previous_timestamp_;
 
@@ -89,10 +86,9 @@ public:
 
   /**
    * Generates the augmented sigma points from the current sigma points
-   * @param Xsig The Current sigma points
    * @return The augmented sigma points
    * */
-  MatrixXd GenerateAugmentedSigmaPoints(MatrixXd* Xsig);
+  MatrixXd GenerateAugmentedSigmaPoints();
 
   /**
   * Predicts the sigma points at time (tk + 1).
