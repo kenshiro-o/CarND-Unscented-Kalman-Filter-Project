@@ -77,15 +77,10 @@ public:
    */
   virtual ~UKF();
 
-  /**
-   * Generates 2 * n_x + 1 sigma points from the current x vector and process
-   * covariance matrix P
-   * @return the generated sigma points */
-  MatrixXd GenerateSigmaPoints();
-
 
   /**
-   * Generates the augmented sigma points from the current sigma points
+   * Generates the augmented sigma points from the current state vector
+   * and state covariance matrix
    * @return The augmented sigma points
    * */
   MatrixXd GenerateAugmentedSigmaPoints();
@@ -96,7 +91,7 @@ public:
   * @param delta_t The time difference ([tk + 1] - tk)
   * @return The Predicted sigma points at time (tk + 1)
   * */
-  MatrixXd PredictSigmaPoints(MatrixXd* Xsig_aug, double delta_t);
+  MatrixXd PredictSigmaPoints(const MatrixXd &Xsig_aug, double delta_t);
 
 
   /**
@@ -104,7 +99,7 @@ public:
    * @param Xsig_pred the predicted sigma points
    * @return The predicted mean vector calculated from the sigma points
    */
-  VectorXd PredictMean(MatrixXd* Xsig_pred);
+  VectorXd PredictMean(const MatrixXd &Xsig_pred);
 
 
   /**
@@ -113,7 +108,7 @@ public:
    * @param x The mean state vector
    * @return the predicted state covariance matrix
    */ 
-  MatrixXd PredictStateCovarianceMatrix(MatrixXd* Xsig_pred, VectorXd* x);
+  MatrixXd PredictStateCovarianceMatrix(const MatrixXd &Xsig_pred, const VectorXd &x);
 
   /**
    * ProcessMeasurement
